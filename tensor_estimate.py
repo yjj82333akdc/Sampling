@@ -158,32 +158,52 @@ class vrs_prediction:
 
         return B
 
-    def compute_density(self, X_, x_k):
+    def compute_density(self, X):
         '''
-        X_ length k-1 list, [x_1, x_2 ... x_{k-1}] have been generated as fix values,
-        to compute the density p(x_k|x_1,x_2,...,x_{k-1}), which is a function of x_1,...,x_k
+        X length k list, [x_1, x_2 ... x_{k-1}] have been generated as fix values,
+        to compute the joint density p(x_1,x_2,...,x_k)
         '''
-        if len(X_) < self.dim - 1:
-            X_enlarged = X_ + [x_k] + [0.0] * (self.dim - 1 - len(X_))
+        if 0 < len(X) < self.dim:
+            X_enlarged = X + [0.0] * (self.dim - len(X))
+        elif len(X) == 0:
+            return 1
         else:
-            X_enlarged = X_ + [x_k]
-        basis_val_k = self.generate_new_basis_vector.compute_basis_val(X_enlarged)[:len(X_)+1]
+            X_enlarged = X
+        basis_val_k = self.generate_new_basis_vector.compute_basis_val(X_enlarged)[:len(X)]
 
-        B = self.contract_core(len(X_)+1)
+        B = self.contract_core(len(X))
         p = np.tensordot(basis_val_k[0], B, axes=(0, 0))
-        for dd in range(1, len(X_)+1):
+        for dd in range(1, len(X)):
             p = np.tensordot(basis_val_k[dd], p, axes=(0, 0))
         return p
 
-    def F(self, X_, x_k):
-        # compute the integral of \int_0^{x_k} compute_density(x_k|x_1,...,x_k-1) dx_k.
-        # X_ = [x_1,...,x_k-1] are fixed numbers
-        if x_k <= 0.0:
+
+    def conditional_density(self, X_, x):
+        '''
+        X_ length k-1 list, [x_1, x_2 ... x_{k-1}] have been generated as fix values,
+        to compute the conditional density p(x_k | x_1,x_2,...,x_{k-1})
+        '''
+        joint_density = self.compute_density(X_ + x)
+        marginal_density = self.compute_density(X_)
+        if marginal_density <= 0.0:
             return 0.0
-        x_k = float(np.clip(x_k, 0.0, 1.0))
-        integrand = lambda t: float(self.compute_density(X_, float(t)))
-        result, _ = quad(integrand, 0.0, x_k, epsabs=1e-8, epsrel=1e-8, limit=50)
-        return float(result)
+        else:
+            return joint_density / marginal_density
+
+    def F(self, X_, x):
+        """
+        CDF F(X_, x) = \int_0^x p(x_k | X_) dx_k
+        where p(x_k | X_) is the conditional density of x_k given previous X_.
+        """
+        if x <= 0.0:
+            return 0.0
+        elif x >= 1.0:
+            return 1.0
+
+        integrand = lambda x_k: self.conditional_density(X_, [x_k])
+        result, _ = quad(integrand, 0.0, x, epsabs=1e-8, epsrel=1e-8, limit=50)
+        return result
+
 
     def F_inverse(self, X_, y, low=0.0, high=1.0, tol=1e-6, max_iter=50):
         """

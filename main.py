@@ -12,7 +12,8 @@ from plot_samples import plot_3d_samples, plot_2d_samples
 
 
 dim = 3
-N_train = 1000
+N_train = 5000
+N_samples = 1000
 
 ##############tuning parameter selection
 MM = 10
@@ -55,12 +56,12 @@ for rr in range(10):
 
 
 
+#Sampling:
 
-samples = vrs_model.sampling_N_ori_domain(100)
-
-
+samples = vrs_model.sampling_N_ori_domain(N_samples)
 
 #compare_first_dim_stats(X_train, samples, distribution=distribution)
-
-#plot_2d_samples(X_train, samples)
-plot_3d_samples(X_train, samples)
+if dim == 2:
+    plot_2d_samples(X_train, samples)
+if dim == 3:
+    plot_3d_samples(X_train, samples)
