@@ -191,18 +191,57 @@ class vrs_prediction:
             return joint_density / marginal_density
 
     def F(self, X_, x):
-        """
-        CDF F(X_, x) = int_0^x p(x_k | X_) dx_k
-        where p(x_k | X_) is the conditional density of x_k given previous X_.
-        """
+        """Analytic CDF F(X_, x) = ∫_0^x p(x_k | X_) dx_k using basis integrals."""
+        # trivial bounds
         if x <= 0.0:
             return 0.0
         elif x >= 1.0:
             return 1.0
 
-        integrand = lambda x_k: self.conditional_density(X_, [x_k])
-        result, _ = quad(integrand, 0.0, x, epsabs=1e-8, epsrel=1e-8, limit=50)
-        return result
+        k_minus_1 = len(X_)      # number of already-fixed coordinates
+        k = k_minus_1 + 1
+        if k > self.dim:
+            raise ValueError("Length of X_ + 1 exceeds dimension in F().")
+
+        # denominator: marginal density p(X_)
+        marginal_density = self.compute_density(X_)
+        if marginal_density <= 0.0:
+            return 0.0
+
+        # 1) contract A_predict over modes j >= k, as in compute_density for length-k input
+        B = self.contract_core(k)    # shape: (r_0, ..., r_{k-1})
+
+        # 2) contract over the first k-1 coordinates with basis values at X_
+        if k_minus_1 > 0:
+            if 0 < k_minus_1 < self.dim:
+                X_enlarged = X_ + [0.0] * (self.dim - k_minus_1)
+            else:
+                X_enlarged = X_
+            basis_prev = self.generate_new_basis_vector.compute_basis_val(X_enlarged)[:k_minus_1]
+
+            coeff_vec = np.tensordot(basis_prev[0], B, axes=(0, 0))
+            for dd in range(1, k_minus_1):
+                coeff_vec = np.tensordot(basis_prev[dd], coeff_vec, axes=(0, 0))
+        else:
+            # no previous coordinates: B is already the coefficient vector in dim 0
+            coeff_vec = B
+
+        # coeff_vec now has shape (r_{k-1},) and represents the coefficients of the
+        # new basis φ_j for the k-th coordinate.
+        # 3) Integrate φ_j from 0 to x analytically and take the dot product.
+        basis_integrals_k = self.generate_new_basis_vector.basis[k_minus_1] \
+            .compute_integral_single_x_new_basis(x)
+
+        joint_integral = float(np.tensordot(basis_integrals_k, coeff_vec, axes=(0, 0)))
+
+        F_val = joint_integral / marginal_density
+        # clamp small numerical noise
+        if F_val < 0.0:
+            F_val = 0.0
+        elif F_val > 1.0:
+            F_val = 1.0
+        return float(F_val)
+
 
 
     def F_inverse(self, X_, y, low=0.0, high=1.0, tol=1e-6, max_iter=50):
