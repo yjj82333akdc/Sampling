@@ -1,5 +1,6 @@
 from polynomial import generate_basis_vector_given_coordinates, generate_new_basis_vector
 import numpy as np
+import time
 
 class compute_rank_one:
     # we compute rank 1 tensor given basis_val
@@ -361,6 +362,8 @@ class vrs_prediction:
         return Z
 
     def sampling_N_ori_domain(self, N):
+        start = time.perf_counter()
         Z_samples = self.sampling_N(N)
         X_samples = self.new_domain.inverse_compute_data(Z_samples)
-        return X_samples
+        elapsed = time.perf_counter() - start
+        return X_samples, elapsed

@@ -33,31 +33,6 @@ def energy_distance(X, Y):
     return abs(ed2)
 
 
-def energy_distance_perm_test(X, Y, n_perm=500, random_state=None):
-    """
-    Returns (ED, p_value) using a permutation test.
-    """
-    rng = np.random.default_rng(random_state)
-    X = np.asarray(X)
-    Y = np.asarray(Y)
-    n, m = X.shape[0], Y.shape[0]
-
-    ed_obs = energy_distance(X, Y)
-
-    Z = np.vstack([X, Y])
-    N = n + m
-    count = 0
-
-    for _ in range(n_perm):
-        perm = rng.permutation(N)
-        Xp = Z[perm[:n]]
-        Yp = Z[perm[n:]]
-        ed_perm = energy_distance(Xp, Yp)
-        if ed_perm >= ed_obs:
-            count += 1
-
-    p_value = (count + 1) / (n_perm + 1)  # permutation p-value
-    return ed_obs, p_value
 
 def compare_mean_var(X_train, samples, name_train="X_train", name_samples="samples"):
     """
@@ -107,7 +82,6 @@ def compare_mean_var(X_train, samples, name_train="X_train", name_samples="sampl
         f"| {name_train}_var | {name_samples}_var | diff_var"
     )
     print(header)
-    print("-" * len(header))
 
     for j in range(d):
         print(
@@ -123,6 +97,60 @@ def compare_mean_var(X_train, samples, name_train="X_train", name_samples="sampl
 
     return mean_train, mean_samples, var_train, var_samples, ss_mean_diff, ss_var_diff, ss_total
 
+
+def metric(X_train, samples, dim, N_samples, elapsed):
+    """
+    Compute diagnostics and plots for a batch of samples.
+
+    Parameters
+    ----------
+    X_train : ndarray, shape (N_train, dim)
+    samples : ndarray, shape (N_samples, dim)
+    dim : int
+        Dimension.
+    N_samples : int
+        Number of generated samples.
+    elapsed : float
+        Wall-clock time (seconds) used to generate `samples`.
+
+    Returns
+    -------
+    metrics : dict
+        Contains ED2, mean/var stats, SS differences, and elapsed time.
+    """
+    # accuracy evaluation
+    ED2 = energy_distance(X_train, samples)
+    print("Energy distance^2:", ED2)
+
+    (mean_train, mean_samples,
+     var_train, var_samples,
+     ss_mean_diff, ss_var_diff, ss_total) = compare_mean_var(X_train, samples)
+
+    print("SS(mean diff) / dim =", ss_mean_diff / dim)
+    print("SS(var  diff) / dim =", ss_var_diff / dim)
+    print("SS(total) / dim     =", ss_total / dim)
+
+    # timing
+    print(f"Sampling {N_samples} points in dim={dim} took {elapsed:.4f} seconds")
+    print(f"sampling time per point ≈ {elapsed / N_samples:.6e} seconds")
+
+    # plots
+    if dim == 2:
+        plot_2d_samples(X_train, samples)
+    if dim == 3:
+        plot_3d_samples(X_train, samples)
+
+    return {
+        "ED2": ED2,
+        "mean_train": mean_train,
+        "mean_samples": mean_samples,
+        "var_train": var_train,
+        "var_samples": var_samples,
+        "ss_mean_diff": ss_mean_diff,
+        "ss_var_diff": ss_var_diff,
+        "ss_total": ss_total,
+        "elapsed": elapsed,
+    }
 
 #for plotting samples when d=2 or 3
 def plot_3d_samples(X_train, samples, title="3D Samples with all pairwise projections"):
